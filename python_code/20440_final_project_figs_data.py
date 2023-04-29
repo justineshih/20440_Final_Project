@@ -263,3 +263,67 @@ pc2_top_genes_fam = [gene.iloc[i] for i in pc2_ind]
 print(pc1_top_genes)
 print(pc1_top_genes)
 
+#Hierarchical clustering of all genes with loci identified in Fig 3 annotated 
+#Indexes of loci identified
+samples_of_interest = [37294, 37295, 37296, 37297, 27271, 27272, 27273, 27274, 21785, 21786, 
+                       21787, 21788, 21789, 21790, 3511, 3512, 3513, 3514, 3843, 3844, 
+                       3845, 3846, 3847]
+
+sample_labels = [i if i in samples_of_interest else None
+                 for i in list(df_cm.index)]
+
+cm = sns.clustermap(df_cm_all_s, xticklabels=x_labels,yticklabels=sample_labels,
+                    col_cluster=False, row_colors=cluster_color)
+plt.savefig('20440_Proj_allgenes_Heatmap.png',bbox_inches='tight')
+
+#Cluster against all genes to see which other clusters the top families cluster with
+# Load annotated RNA csv to dataframe ##
+df_cm = pd.read_csv('Rice_RNA_FPKM_Data_Annotated.csv')
+df_cm = df_cm.drop(['Unnamed: 0'], axis=1)
+
+## Filter data for highest expressing genes and cluster ##
+# Generate dataframe for filtering
+df_cm_all = df_cm.copy()
+loc_all = df_cm_all.pop('loc')
+gene_all = df_cm_all.pop('gene')
+df_cm_3 = df_cm_all.copy()
+scaler = StandardScaler() # Create standard scaler
+
+        
+# Scale dataframe
+df_cm_all_s = scaler.fit_transform(df_cm_all.T)
+df_cm_all_s = df_cm_all_s.T
+
+# Cluster by flat cluster distance = 2
+dist_mtx_all = sci.spatial.distance.pdist(df_cm_all_s)
+link_mtx_all = sci.cluster.hierarchy.linkage(df_cm_all_s)
+flat_clust_all = fcluster(link_mtx_all, t=0.5, criterion='distance').tolist() # Flat cluster with distance
+df_cm["cluster_dis_1.5"] = flat_clust_all
+
+#with t = 0.5, created 18614 clusters
+
+
+#See what genes identified in Fig3 cluster with
+#What other genes does the gene family polyadenylate-binding protein, putative, expressed correlate with?
+#What about he other families?
+gene_fams = ["polyadenylate-binding protein, putative, expressed",
+            "fruit bromelain precursor, putative, expressed",
+            "IscA-like iron-sulfur assembly protein, mitochondrial precursor, putative, expressed",
+            "Leucine rich repeat N-terminal domain containing protein, putative, expressed",
+            "type I inositol-1,4,5-trisphosphate 5-phosphatase, putative, expressed"]
+
+#for each of the 5 gene families, see what other genes are clustered together with them
+for fam in gene_fams:
+    gg = ssc_df[ssc_df["gene_family"] == fam]["gene_group"]
+    gene_index_list = list(gene_dfs[int(gg)].index)
+    gene_cluster_list = list(df_cm.iloc[min(gene_index_list) : max(gene_index_list)+1]["cluster_dis_1.5"].unique())
+
+    for cluster in gene_cluster_list:
+        clus = df_cm[df_cm["cluster_dis_1.5"] == cluster][["Common FW1", "Common FW2", "Common FW3", "SR86 FW1",
+                                        "SR86 FW2", "SR86 FW3", "SR86 SW1", "SR86 SW2", "SR86 SW3"]]
+        clus_s = scaler.fit_transform(clus.T)
+        clus_s = clus_s.T
+        sample_labels = [i if i in gene_index_list else None
+                 for i in list(df_cm[df_cm["cluster_dis_1.5"] == cluster].index)]
+        cm = sns.clustermap(clus_s, xticklabels=x_labels, yticklabels=sample_labels)
+        plt.savefig('20440_Proj_' + fam + "_" + str(cluster) + '_Heatmap.png',bbox_inches='tight')
